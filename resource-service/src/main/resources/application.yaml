@@ -28,6 +28,17 @@ spring:
 song-service:
   base-url: ${SONG_SERVICE_URL:http://song-service}
 
+# S3 object storage (LocalStack emulator). Local defaults target a LocalStack
+# running on the host; compose overrides the endpoint with the service name.
+# The emulator accepts any credentials, so the defaults are dummy values.
+s3:
+  endpoint: ${S3_ENDPOINT:http://localhost:4566}
+  region: ${S3_REGION:us-east-1}
+  bucket: ${S3_BUCKET:resource-files}
+  access-key: ${S3_ACCESS_KEY:test}
+  secret-key: ${S3_SECRET_KEY:test}
+  path-style: ${S3_PATH_STYLE:true}
+
 # Eureka client. defaultZone points at the registry; the tip intervals below
 # speed up registration/discovery for local development and the demo.
 eureka:
