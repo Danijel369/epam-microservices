@@ -1,7 +1,7 @@
-package com.epam.microservices.resource.service;
+package com.epam.microservices.processor.service;
 
-import com.epam.microservices.resource.dto.Mp3Tags;
-import com.epam.microservices.resource.exception.InvalidMp3Exception;
+import com.epam.microservices.processor.dto.Mp3Tags;
+import com.epam.microservices.processor.exception.InvalidMp3Exception;
 import org.apache.tika.Tika;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
@@ -15,17 +15,22 @@ import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Extracts MP3 tags with Apache Tika's {@link Mp3Parser}. All tags are passed
- * through unchanged except {@code duration}, which is converted from seconds to
- * mm:ss format.
+ * Extracts MP3 tags with Apache Tika's {@link Mp3Parser}. Tags are passed through
+ * unchanged except {@code duration}, which is converted from seconds to mm:ss,
+ * and {@code year}, which is reduced to a four-digit year so it matches the
+ * Song Service's expected format.
  */
 @Component
 public class Mp3MetadataExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(Mp3MetadataExtractor.class);
     private static final String MP3_MEDIA_TYPE = "audio/mpeg";
+    // A four-digit year in the 1900-2099 range, as accepted by the Song Service.
+    private static final Pattern YEAR_PATTERN = Pattern.compile("(19|20)\\d{2}");
 
     private final Tika tika = new Tika();
 
@@ -90,9 +95,15 @@ public class Mp3MetadataExtractor {
     }
 
     /**
-     * Uses the release date tag as the year, passed through unchanged.
+     * Reads the release-date tag and reduces it to a four-digit year so it
+     * matches the Song Service's year format. Returns null if none is found.
      */
     private String extractYear(Metadata metadata) {
-        return metadata.get(XMPDM.RELEASE_DATE);
+        String rawDate = metadata.get(XMPDM.RELEASE_DATE);
+        if (rawDate == null) {
+            return null;
+        }
+        Matcher matcher = YEAR_PATTERN.matcher(rawDate);
+        return matcher.find() ? matcher.group() : null;
     }
 }
