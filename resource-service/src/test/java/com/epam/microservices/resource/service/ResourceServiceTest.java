@@ -2,8 +2,12 @@ package com.epam.microservices.resource.service;
 
 import com.epam.microservices.resource.client.SongServiceClient;
 import com.epam.microservices.resource.entity.ResourceEntity;
+import com.epam.microservices.resource.exception.DownstreamException;
+import com.epam.microservices.resource.exception.InvalidCsvTokenException;
 import com.epam.microservices.resource.exception.InvalidFileFormatException;
+import com.epam.microservices.resource.exception.InvalidIdException;
 import com.epam.microservices.resource.exception.InvalidMp3Exception;
+import com.epam.microservices.resource.exception.ResourceNotFoundException;
 import com.epam.microservices.resource.exception.StorageException;
 import com.epam.microservices.resource.repository.ResourceRepository;
 import org.junit.jupiter.api.Test;
@@ -13,10 +17,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -107,5 +115,124 @@ class ResourceServiceTest {
                 .hasMessage("db down");
 
         verify(storage).delete(LOCATION);
+    }
+
+    @Test
+    void getDataReturnsBytesDownloadedFromS3() {
+        byte[] bytes = {5, 6, 7};
+        ResourceEntity entity = new ResourceEntity();
+        entity.setS3Location(LOCATION);
+        when(idParser.parsePathId("1")).thenReturn(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(entity));
+        when(storage.download(LOCATION)).thenReturn(bytes);
+
+        assertThat(service.getData("1")).isEqualTo(bytes);
+    }
+
+    @Test
+    void getDataThrowsNotFoundForUnknownId() {
+        when(idParser.parsePathId("2")).thenReturn(2L);
+        when(repository.findById(2L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getData("2"))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void getDataRejectsMalformedIdBeforeTouchingStorage() {
+        when(idParser.parsePathId("abc")).thenThrow(new InvalidIdException("abc"));
+
+        assertThatThrownBy(() -> service.getData("abc"))
+                .isInstanceOf(InvalidIdException.class);
+
+        verifyNoInteractions(repository, storage);
+    }
+
+    @Test
+    void getDataSurfacesStorageErrorWhenObjectMissing() {
+        ResourceEntity entity = new ResourceEntity();
+        entity.setS3Location(LOCATION);
+        when(idParser.parsePathId("1")).thenReturn(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(entity));
+        when(storage.download(LOCATION)).thenThrow(new StorageException("missing object", null));
+
+        assertThatThrownBy(() -> service.getData("1"))
+                .isInstanceOf(StorageException.class);
+    }
+
+    @Test
+    void deleteRemovesS3ObjectAndDbRowForExistingIdsThenCascades() {
+        String location2 = "s3://resource-files/def.mp3";
+        ResourceEntity entity1 = new ResourceEntity();
+        entity1.setS3Location(LOCATION);
+        ResourceEntity entity2 = new ResourceEntity();
+        entity2.setS3Location(location2);
+        when(idParser.parseCsv("1,2")).thenReturn(List.of(1L, 2L));
+        when(repository.findById(1L)).thenReturn(Optional.of(entity1));
+        when(repository.findById(2L)).thenReturn(Optional.of(entity2));
+
+        assertThat(service.delete("1,2")).containsExactly(1L, 2L);
+
+        verify(storage).delete(LOCATION);
+        verify(storage).delete(location2);
+        verify(repository).delete(entity1);
+        verify(repository).delete(entity2);
+        verify(songServiceClient).deleteMetadata(List.of(1L, 2L));
+    }
+
+    @Test
+    void deleteIgnoresIdsThatDoNotExist() {
+        ResourceEntity entity1 = new ResourceEntity();
+        entity1.setS3Location(LOCATION);
+        when(idParser.parseCsv("1,2")).thenReturn(List.of(1L, 2L));
+        when(repository.findById(1L)).thenReturn(Optional.of(entity1));
+        when(repository.findById(2L)).thenReturn(Optional.empty());
+
+        assertThat(service.delete("1,2")).containsExactly(1L);
+
+        verify(storage).delete(LOCATION);
+        verify(repository).delete(entity1);
+        verify(songServiceClient).deleteMetadata(List.of(1L));
+    }
+
+    @Test
+    void deleteWithNoMatchingIdsSkipsStorageAndCascadesEmptyList() {
+        when(idParser.parseCsv("9,10")).thenReturn(List.of(9L, 10L));
+        when(repository.findById(9L)).thenReturn(Optional.empty());
+        when(repository.findById(10L)).thenReturn(Optional.empty());
+
+        assertThat(service.delete("9,10")).isEmpty();
+
+        verifyNoInteractions(storage);
+        verify(repository, never()).delete(any(ResourceEntity.class));
+        verify(songServiceClient).deleteMetadata(List.of());
+    }
+
+    @Test
+    void deletePropagatesSongServiceFailureAfterLocalDeletes() {
+        ResourceEntity entity1 = new ResourceEntity();
+        entity1.setS3Location(LOCATION);
+        when(idParser.parseCsv("1")).thenReturn(List.of(1L));
+        when(repository.findById(1L)).thenReturn(Optional.of(entity1));
+        doThrow(new DownstreamException(500, "song service down"))
+                .when(songServiceClient).deleteMetadata(List.of(1L));
+
+        assertThatThrownBy(() -> service.delete("1"))
+                .isInstanceOf(DownstreamException.class);
+
+        verify(storage).delete(LOCATION);
+        verify(repository).delete(entity1);
+    }
+
+    @Test
+    void deleteRejectsInvalidCsvTokenBeforeAnySideEffects() {
+        when(idParser.parseCsv("x")).thenThrow(new InvalidCsvTokenException("x"));
+
+        assertThatThrownBy(() -> service.delete("x"))
+                .isInstanceOf(InvalidCsvTokenException.class);
+
+        verifyNoInteractions(repository, storage, songServiceClient);
     }
 }

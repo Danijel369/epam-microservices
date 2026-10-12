@@ -8,10 +8,10 @@ import com.epam.microservices.resource.repository.ResourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ResourceService {
@@ -70,28 +70,31 @@ public class ResourceService {
         }
     }
 
-    @Transactional(readOnly = true)
     public byte[] getData(String rawId) {
         long id = idParser.parsePathId(rawId);
-        return repository.findById(id)
+        String location = repository.findById(id)
                 .map(ResourceEntity::getS3Location)
-                .map(storage::download)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
+        return storage.download(location);
     }
 
     /**
-     * Deletes the given resources (ignoring ids that do not exist) and cascades
-     * deletion of the matching song metadata. A Song Service failure rolls back
-     * the resource deletions.
+     * Removes each existing resource from object storage and the database
+     * (ignoring ids that do not exist), then cascades the deletion to the Song
+     * Service, which ignores unknown ids. Object-storage deletes are irreversible,
+     * so the method runs without a transaction and follows the spec order:
+     * object storage, then database, then Song Service.
      */
-    @Transactional
     public List<Long> delete(String csv) {
         List<Long> requestedIds = idParser.parseCsv(csv);
 
         List<Long> deletedIds = new ArrayList<>();
         for (Long id : requestedIds) {
-            if (repository.existsById(id)) {
-                repository.deleteById(id);
+            Optional<ResourceEntity> found = repository.findById(id);
+            if (found.isPresent()) {
+                ResourceEntity entity = found.get();
+                storage.delete(entity.getS3Location());
+                repository.delete(entity);
                 deletedIds.add(id);
             }
         }
