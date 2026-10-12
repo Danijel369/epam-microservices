@@ -1,0 +1,468 @@
+{
+	"info": {
+		"_postman_id": "6f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+		"name": "Microservices Fundamentals - Module 1",
+		"description": "Module 1 Resource Service API (upload, get, delete).\n\nPrerequisite: start the full stack with `docker compose up -d --build` (eureka-server, resource-service, resource-db, localstack, song-db, song-service). The DELETE requests cascade to the Song Service, so it must be reachable. Request 'Delete non-existing id' would pass without it, but run the whole collection against the full stack.\n\nRun with Newman from the repo root:\n`npx newman run postman/microservices_fundamentals_module_1.postman_collection.json --working-dir postman`\nThe `--working-dir postman` option lets the relative MP3 file body (`mp3/valid-sample-with-required-tags.mp3`) resolve. In the Postman app, re-select that file for 'Upload valid MP3' and 'Upload for mixed delete' if needed.\n\nVariables: `baseUrl` (default http://localhost:8081); `resourceId` and `mixedId` are populated by the upload test scripts.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8081"
+		},
+		{
+			"key": "resourceId",
+			"value": ""
+		},
+		{
+			"key": "mixedId",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "Upload",
+			"item": [
+				{
+					"name": "Upload valid MP3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Response has a numeric id\", function () {",
+									"    var json = pm.response.json();",
+									"    pm.expect(json).to.have.property(\"id\");",
+									"    pm.expect(json.id).to.be.a(\"number\");",
+									"    pm.collectionVariables.set(\"resourceId\", json.id);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "audio/mpeg"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "mp3/valid-sample-with-required-tags.mp3"
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/resources",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							]
+						},
+						"description": "Valid MP3 upload. Expect 200 with {\"id\": <number>}. Stores the id in the resourceId variable."
+					}
+				},
+				{
+					"name": "Upload with invalid content-type",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Error code is 400\", function () {",
+									"    pm.expect(pm.response.json().errorCode).to.eql(\"400\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "mp3/valid-sample-with-required-tags.mp3"
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/resources",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							]
+						},
+						"description": "MP3 body sent with Content-Type text/plain. The content-type is rejected before the body is read. Expect 400."
+					}
+				},
+				{
+					"name": "Upload with invalid MP3 body",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "audio/mpeg"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "this is not an mp3 file",
+							"options": {
+								"raw": {
+									"language": "text"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/resources",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							]
+						},
+						"description": "Non-MP3 bytes sent with Content-Type audio/mpeg. The magic-byte check rejects it. Expect 400."
+					}
+				}
+			]
+		},
+		{
+			"name": "Get",
+			"item": [
+				{
+					"name": "Get existing resource",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is audio/mpeg\", function () {",
+									"    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"audio/mpeg\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources/{{resourceId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources",
+								"{{resourceId}}"
+							]
+						},
+						"description": "Download the resource uploaded earlier. Expect 200 and Content-Type audio/mpeg."
+					}
+				},
+				{
+					"name": "Get unknown resource",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources/999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources",
+								"999999"
+							]
+						},
+						"description": "No row with this id. Expect 404."
+					}
+				},
+				{
+					"name": "Get with malformed id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources/abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources",
+								"abc"
+							]
+						},
+						"description": "Non-numeric id. Expect 400."
+					}
+				}
+			]
+		},
+		{
+			"name": "Delete",
+			"item": [
+				{
+					"name": "Upload for mixed delete",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Response has a numeric id\", function () {",
+									"    var json = pm.response.json();",
+									"    pm.expect(json.id).to.be.a(\"number\");",
+									"    pm.collectionVariables.set(\"mixedId\", json.id);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "audio/mpeg"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "mp3/valid-sample-with-required-tags.mp3"
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/resources",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							]
+						},
+						"description": "Helper upload so the mixed-delete case has a known existing id. Stores it in mixedId."
+					}
+				},
+				{
+					"name": "Delete mixed ids (existing + non-existing)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Only the existing id is returned\", function () {",
+									"    var ids = pm.response.json().ids;",
+									"    var mixedId = Number(pm.collectionVariables.get(\"mixedId\"));",
+									"    pm.expect(ids).to.eql([mixedId]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources?id={{mixedId}},999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "id",
+									"value": "{{mixedId}},999999"
+								}
+							]
+						},
+						"description": "Delete one existing and one non-existing id. Expect 200 with only the existing id in ids."
+					}
+				},
+				{
+					"name": "Delete existing resource",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Deleted ids contain the resource id\", function () {",
+									"    var ids = pm.response.json().ids;",
+									"    var resourceId = Number(pm.collectionVariables.get(\"resourceId\"));",
+									"    pm.expect(ids).to.include(resourceId);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources?id={{resourceId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "id",
+									"value": "{{resourceId}}"
+								}
+							]
+						},
+						"description": "Delete the resource uploaded first. Expect 200 with {\"ids\": [resourceId]}."
+					}
+				},
+				{
+					"name": "Confirm deleted resource is gone",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Deleted resource returns 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources/{{resourceId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources",
+								"{{resourceId}}"
+							]
+						},
+						"description": "After deletion the row and S3 object are gone, so GET returns 404 (API-level confirmation of removal)."
+					}
+				},
+				{
+					"name": "Delete non-existing id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"No ids deleted\", function () {",
+									"    pm.expect(pm.response.json().ids).to.eql([]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/resources?id=999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "id",
+									"value": "999999"
+								}
+							]
+						},
+						"description": "Delete an id that does not exist. Expect 200 with an empty ids array and no error."
+					}
+				}
+			]
+		}
+	]
+}
