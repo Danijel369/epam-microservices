@@ -33,6 +33,26 @@ services:
       timeout: 5s
       retries: 10
 
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: localstack
+    # S3 emulator for resource-service. Multi-arch image, so it runs natively on
+    # Apple Silicon (no platform override needed, unlike the Temurin JVM services).
+    ports:
+      - "4566:4566"
+    environment:
+      # Start only the S3 provider (faster, lighter); it is all we use.
+      SERVICES: s3
+    # No data volume: like the databases, state resets on `down`. The app
+    # re-creates its bucket on startup, so the emulator always starts empty.
+    healthcheck:
+      # Pass only once S3 itself reports ready, not merely when the edge port answers.
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -Eq '\"s3\": \"(available|running)\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
   song-db:
     image: postgres:17-alpine
     container_name: song-db
@@ -87,10 +107,19 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${RESOURCE_DB_PASSWORD}
       EUREKA_URL: ${EUREKA_URL}
       EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
+      # S3 object storage (LocalStack). Consumed by the S3 client added in ST-2.
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_PATH_STYLE: ${S3_PATH_STYLE}
     # song-service is discovered dynamically through Eureka, so it is not a
-    # startup dependency here; only the DB and the registry are.
+    # startup dependency here; only the DB, the registry and S3 storage are.
     depends_on:
       resource-db:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
