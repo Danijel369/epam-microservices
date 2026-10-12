@@ -1,12 +1,12 @@
 package com.epam.microservices.resource.service;
 
 import com.epam.microservices.resource.client.SongServiceClient;
-import com.epam.microservices.resource.dto.Mp3Tags;
-import com.epam.microservices.resource.dto.SongMetadataRequest;
 import com.epam.microservices.resource.entity.ResourceEntity;
 import com.epam.microservices.resource.exception.InvalidFileFormatException;
 import com.epam.microservices.resource.exception.ResourceNotFoundException;
 import com.epam.microservices.resource.repository.ResourceRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,45 +18,56 @@ public class ResourceService {
 
     private static final String MP3_CONTENT_TYPE = "audio/mpeg";
 
+    private static final Logger log = LoggerFactory.getLogger(ResourceService.class);
+
     private final ResourceRepository repository;
     private final StorageService storage;
-    private final Mp3MetadataExtractor extractor;
+    private final Mp3Validator mp3Validator;
     private final SongServiceClient songServiceClient;
     private final IdParser idParser;
 
     public ResourceService(ResourceRepository repository,
                            StorageService storage,
-                           Mp3MetadataExtractor extractor,
+                           Mp3Validator mp3Validator,
                            SongServiceClient songServiceClient,
                            IdParser idParser) {
         this.repository = repository;
         this.storage = storage;
-        this.extractor = extractor;
+        this.mp3Validator = mp3Validator;
         this.songServiceClient = songServiceClient;
         this.idParser = idParser;
     }
 
     /**
-     * Stores the MP3, extracts its tags and hands them to the Song Service.
-     * A failure of the Song Service rolls back the stored resource.
+     * Validates the upload, stores the MP3 in object storage and records its
+     * location. If persisting the location fails, the stored object is removed
+     * so that no orphan is left behind.
      */
-    @Transactional
     public long upload(byte[] data, String contentType) {
         validateContentType(contentType);
-
-        Mp3Tags tags = extractor.extract(data);
+        mp3Validator.validate(data);
 
         String location = storage.upload(data, contentType);
+        try {
+            ResourceEntity entity = new ResourceEntity();
+            entity.setS3Location(location);
+            return repository.saveAndFlush(entity).getId();
+        } catch (RuntimeException e) {
+            deleteQuietly(location);
+            throw e;
+        }
+    }
 
-        ResourceEntity entity = new ResourceEntity();
-        entity.setS3Location(location);
-        ResourceEntity saved = repository.saveAndFlush(entity);
-
-        SongMetadataRequest metadata = new SongMetadataRequest(
-                saved.getId(), tags.name(), tags.artist(), tags.album(), tags.duration(), tags.year());
-        songServiceClient.createMetadata(metadata);
-
-        return saved.getId();
+    /**
+     * Best-effort removal of a stored object after a failed persist. A failure
+     * here is logged but never masks the original error.
+     */
+    private void deleteQuietly(String location) {
+        try {
+            storage.delete(location);
+        } catch (RuntimeException cleanupError) {
+            log.warn("Failed to remove orphaned object {} after a persistence failure", location, cleanupError);
+        }
     }
 
     @Transactional(readOnly = true)
