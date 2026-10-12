@@ -19,15 +19,18 @@ public class ResourceService {
     private static final String MP3_CONTENT_TYPE = "audio/mpeg";
 
     private final ResourceRepository repository;
+    private final StorageService storage;
     private final Mp3MetadataExtractor extractor;
     private final SongServiceClient songServiceClient;
     private final IdParser idParser;
 
     public ResourceService(ResourceRepository repository,
+                           StorageService storage,
                            Mp3MetadataExtractor extractor,
                            SongServiceClient songServiceClient,
                            IdParser idParser) {
         this.repository = repository;
+        this.storage = storage;
         this.extractor = extractor;
         this.songServiceClient = songServiceClient;
         this.idParser = idParser;
@@ -43,8 +46,10 @@ public class ResourceService {
 
         Mp3Tags tags = extractor.extract(data);
 
+        String location = storage.upload(data, contentType);
+
         ResourceEntity entity = new ResourceEntity();
-        entity.setData(data);
+        entity.setS3Location(location);
         ResourceEntity saved = repository.saveAndFlush(entity);
 
         SongMetadataRequest metadata = new SongMetadataRequest(
@@ -58,7 +63,8 @@ public class ResourceService {
     public byte[] getData(String rawId) {
         long id = idParser.parsePathId(rawId);
         return repository.findById(id)
-                .map(ResourceEntity::getData)
+                .map(ResourceEntity::getS3Location)
+                .map(storage::download)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
     }
 

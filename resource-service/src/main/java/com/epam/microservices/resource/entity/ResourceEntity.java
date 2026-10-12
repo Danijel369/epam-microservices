@@ -15,9 +15,9 @@ public class ResourceEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Stored as PostgreSQL bytea (no @Lob).
-    @Column(name = "data", nullable = false, columnDefinition = "bytea")
-    private byte[] data;
+    // Canonical S3 object location in the form s3://<bucket>/<key>.
+    @Column(name = "s3_location", nullable = false)
+    private String s3Location;
 
     public Long getId() {
         return id;
@@ -27,11 +27,11 @@ public class ResourceEntity {
         this.id = id;
     }
 
-    public byte[] getData() {
-        return data;
+    public String getS3Location() {
+        return s3Location;
     }
 
-    public void setData(byte[] data) {
-        this.data = data;
+    public void setS3Location(String s3Location) {
+        this.s3Location = s3Location;
     }
 }
