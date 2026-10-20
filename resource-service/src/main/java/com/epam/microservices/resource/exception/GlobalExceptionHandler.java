@@ -111,6 +111,18 @@ public class GlobalExceptionHandler {
                         String.valueOf(HttpStatus.NOT_ACCEPTABLE.value())));
     }
 
+    /**
+     * A failure in the object storage is a server-side fault — answer 500 with
+     * the standard error body and log the underlying cause.
+     */
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ErrorResponse> handleStorage(StorageException ex) {
+        log.error("Storage operation failed", ex);
+        return json(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("Internal server error",
+                        String.valueOf(HttpStatus.INTERNAL_SERVER_ERROR.value())));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         log.error("Unexpected error handling request", ex);

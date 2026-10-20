@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: resource-processor
+  main:
+    # No web interface in this module: run as a plain (non-web) Spring Boot app.
+    web-application-type: none

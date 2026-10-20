@@ -30,6 +30,7 @@ TASK-M2.md
 TASK-M3.md
 docs/
 screenshots/
-postman/
+postman/*
+!postman/*.json
 *.pdf
 *.docx

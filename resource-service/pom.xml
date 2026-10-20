@@ -21,6 +21,7 @@
         <java.version>17</java.version>
         <tika.version>2.9.2</tika.version>
         <spring-cloud.version>2024.0.1</spring-cloud.version>
+        <aws-sdk.version>2.55.14</aws-sdk.version>
     </properties>
 
     <dependencyManagement>
@@ -29,6 +30,13 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws-sdk.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -62,6 +70,18 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- AWS SDK v2 S3 client: stores MP3 files in the S3 emulator (LocalStack). -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+        <!-- Synchronous HTTP client for the S3 client. The s3 module only brings
+             the async (netty) client, so the sync client needs this explicitly. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
@@ -71,6 +91,12 @@
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parser-audiovideo-module</artifactId>
             <version>${tika.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

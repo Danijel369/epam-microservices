@@ -2,8 +2,7 @@ package com.epam.microservices.resource.exception;
 
 /**
  * Carries an error returned by the Song Service so that the Resource Service can
- * pass the downstream status and body through unchanged. Throwing this inside a
- * transactional method also rolls back the resource changes.
+ * pass the downstream status and body through unchanged.
  */
 public class DownstreamException extends RuntimeException {
 

@@ -1,8 +1,6 @@
 package com.epam.microservices.resource.client;
 
-import com.epam.microservices.resource.dto.SongMetadataRequest;
 import com.epam.microservices.resource.exception.DownstreamException;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,18 +20,6 @@ public class SongServiceClient {
 
     public SongServiceClient(RestClient songServiceRestClient) {
         this.restClient = songServiceRestClient;
-    }
-
-    public void createMetadata(SongMetadataRequest request) {
-        restClient.post()
-                .uri("/songs")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, resp) -> {
-                    throw new DownstreamException(resp.getStatusCode().value(), readBody(resp));
-                })
-                .toBodilessEntity();
     }
 
     public void deleteMetadata(List<Long> ids) {

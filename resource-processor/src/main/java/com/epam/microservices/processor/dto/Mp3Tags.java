@@ -1,4 +1,4 @@
-package com.epam.microservices.resource.dto;
+package com.epam.microservices.processor.dto;
 
 /**
  * Tags extracted from an MP3 file. {@code duration} is already converted to mm:ss.
