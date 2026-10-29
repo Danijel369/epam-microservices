@@ -4,6 +4,7 @@ import com.epam.microservices.resource.client.SongServiceClient;
 import com.epam.microservices.resource.entity.ResourceEntity;
 import com.epam.microservices.resource.exception.InvalidFileFormatException;
 import com.epam.microservices.resource.exception.ResourceNotFoundException;
+import com.epam.microservices.resource.messaging.ResourceEventPublisher;
 import com.epam.microservices.resource.repository.ResourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,17 +26,20 @@ public class ResourceService {
     private final Mp3Validator mp3Validator;
     private final SongServiceClient songServiceClient;
     private final IdParser idParser;
+    private final ResourceEventPublisher eventPublisher;
 
     public ResourceService(ResourceRepository repository,
                            StorageService storage,
                            Mp3Validator mp3Validator,
                            SongServiceClient songServiceClient,
-                           IdParser idParser) {
+                           IdParser idParser,
+                           ResourceEventPublisher eventPublisher) {
         this.repository = repository;
         this.storage = storage;
         this.mp3Validator = mp3Validator;
         this.songServiceClient = songServiceClient;
         this.idParser = idParser;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -48,14 +52,21 @@ public class ResourceService {
         mp3Validator.validate(data);
 
         String location = storage.upload(data, contentType);
+        long id;
         try {
             ResourceEntity entity = new ResourceEntity();
             entity.setS3Location(location);
-            return repository.saveAndFlush(entity).getId();
+            id = repository.saveAndFlush(entity).getId();
         } catch (RuntimeException e) {
             deleteQuietly(location);
             throw e;
         }
+        try {
+            eventPublisher.publish(id);
+        } catch (RuntimeException e) {
+            log.error("Failed to publish resource event for id {}: {}", id, e.getMessage(), e);
+        }
+        return id;
     }
 
     /**

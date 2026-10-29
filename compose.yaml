@@ -95,6 +95,24 @@ services:
       eureka-server:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    # Multi-arch image; runs natively on Apple Silicon (no platform override needed).
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    # No data volume: state resets on `down`, consistent with the other services.
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
   resource-service:
     build: ./resource-service
     container_name: resource-service
@@ -114,12 +132,37 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_PATH_STYLE: ${S3_PATH_STYLE}
-    # song-service is discovered dynamically through Eureka, so it is not a
-    # startup dependency here; only the DB, the registry and S3 storage are.
+      # RabbitMQ broker.
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RESOURCE_QUEUE: ${RESOURCE_QUEUE}
     depends_on:
       resource-db:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
       localstack:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  resource-processor:
+    build: ./resource-processor
+    container_name: resource-processor
+    platform: linux/amd64
+    # No ports exposed; processor has no HTTP interface.
+    environment:
+      EUREKA_URL: ${EUREKA_URL}
+      EUREKA_PREFER_IP_ADDRESS: ${EUREKA_PREFER_IP_ADDRESS}
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RESOURCE_QUEUE: ${RESOURCE_QUEUE}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
