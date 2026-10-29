@@ -20,7 +20,20 @@
     <properties>
         <java.version>17</java.version>
         <tika.version>2.9.2</tika.version>
+        <spring-cloud.version>2024.0.1</spring-cloud.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Base (non-web) Spring Boot starter. The Resource Processor has no web
@@ -28,6 +41,26 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- Eureka client: discovery-only (fetch-registry=true, register=false).
+             Brings spring-cloud-loadbalancer transitively, enabling @LoadBalanced
+             RestClient for logical service-name resolution. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- spring-web is needed for RestClient, MediaType, and HttpClientErrorException.
+             It is not brought transitively by the Eureka client in this configuration. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
         </dependency>
 
         <!-- Apache Tika: detects the MP3 media type and parses ID3 tags. -->
@@ -40,6 +73,16 @@
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parser-audiovideo-module</artifactId>
             <version>${tika.version}</version>
+        </dependency>
+
+        <!-- Spring Retry + AOP: enable @Retryable on the REST client methods. -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
 
         <dependency>

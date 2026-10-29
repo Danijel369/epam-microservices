@@ -4,6 +4,16 @@ server:
 spring:
   application:
     name: resource-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:app}
+    password: ${RABBITMQ_PASSWORD:app}
+    template:
+      retry:
+        enabled: true
+        max-attempts: 3
+        initial-interval: 1000ms
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/resource_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -41,6 +51,9 @@ s3:
 
 # Eureka client. defaultZone points at the registry; the tip intervals below
 # speed up registration/discovery for local development and the demo.
+resource:
+  queue: ${RESOURCE_QUEUE:resource.processing}
+
 eureka:
   client:
     service-url:

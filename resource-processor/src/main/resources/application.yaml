@@ -2,5 +2,43 @@ spring:
   application:
     name: resource-processor
   main:
-    # No web interface in this module: run as a plain (non-web) Spring Boot app.
+    # No web interface: run as a plain (non-web) Spring Boot app.
+    # spring-web is on the classpath (via Eureka client) but the embedded server
+    # is not started. The @LoadBalanced RestClient still works without a server.
     web-application-type: none
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:app}
+    password: ${RABBITMQ_PASSWORD:app}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+        default-requeue-rejected: false
+
+resource:
+  queue: ${RESOURCE_QUEUE:resource.processing}
+
+resource-service:
+  base-url: ${RESOURCE_SERVICE_URL:http://resource-service}
+
+song-service:
+  base-url: ${SONG_SERVICE_URL:http://song-service}
+
+http:
+  client:
+    connect-timeout-ms: ${HTTP_CLIENT_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${HTTP_CLIENT_READ_TIMEOUT_MS:5000}
+
+eureka:
+  client:
+    # Discovery-only: the processor does not register itself, only looks up
+    # resource-service and song-service by their logical service IDs.
+    register-with-eureka: false
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
